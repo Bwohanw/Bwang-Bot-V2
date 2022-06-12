@@ -41,7 +41,8 @@ def get_kanji_info():
 	kanji_index = random.randint(0, 1234)
 	url = "https://kanjialive-api.p.rapidapi.com/api/public/kanji/all"
 	headers = {
-	"X-RapidAPI-Key": "1d41bc37d2msh78f8fb3e0b6e999p1ff186jsn00b42632a9ce",
+	#Get your own key off rapidapi
+	"X-RapidAPI-Key": "",
 	"X-RapidAPI-Host": "kanjialive-api.p.rapidapi.com"
 	}
 	response = requests.request("GET", url, headers=headers)
