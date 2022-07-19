@@ -1,9 +1,11 @@
 # IMPORT DISCORD.PY. ALLOWS ACCESS TO DISCORD'S API.
+from http import client
 import discord
 import requests
 import random
 from discord.ext import commands
 import time
+import objecthelper
 
 # Import the os module.
 import os
@@ -16,7 +18,6 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 bot = commands.Bot(command_prefix="$")
 
-mckey = {'a':0, 'b':1, 'c':2, 'd':3}
 
 @bot.command()
 async def ping(ctx):
@@ -76,9 +77,15 @@ def check(list):
 	return inner_check
 
 @bot.command()
-async def kanjiquiz(ctx):
+async def kanjiquiz(ctx, arg=2):
 	points = {}
-	for x in range(2):
+	ungotten = []
+	mckey = {'a':0, 'b':1, 'c':2, 'd':3}
+	try:
+		arg = int(arg)
+	except:
+		await ctx.send("Enter a valid argument stupidhead")
+	for x in range(arg):
 		guessed = []
 		correct = []
 		kanji_info = get_kanji_info()
@@ -105,19 +112,101 @@ async def kanjiquiz(ctx):
 				guessed.append(guess.author.name)
 				if choicelist[mckey[guess.content.lower()]] == reading:
 					correct.append(guess.author.name)
-					await ctx.send("Correct! Good job " + guess.author.name + "!!")
+					#await ctx.send("Correct! Good job " + guess.author.name + "!!")
 					points[guess.author.name] = points[guess.author.name] + 1 if guess.author.name in points.keys() else 1
 				else:
-					await ctx.send("Sorry " + guess.author.name + ", that is not correct")
+					#await ctx.send("Sorry " + guess.author.name + ", that is not correct")
 					if (guess.author.name not in points.keys()):
 						points[guess.author.name] = 0
 			else:
-				await ctx.send("Fuck are you doing stupid bitch guess a real guess next time")
+				await ctx.send("Fuck are you doing stupid bitch " + guess.author.name + " guess a real guess next time")
 				if guess.author.name not in points.keys():
 					points[guess.author.name] = 0
+		if (len(correct) == 0):
+			ungotten.append(reading + ", which means " + meaning + ".")
 		await ctx.send("The round is over. The correct answer was " + reading + "which means " + meaning + ".")
-		await ctx.send(points)
-	await ctx.send(points)
+		await ctx.send("The current points are:\n" + objecthelper.points_to_string(points))
+	await ctx.send("Final results:\n" + objecthelper.points_to_string(points))
+	if len(ungotten) == 0:
+		await ctx.send("All the words were gotten. Congratulations!")
+	else:
+		await ctx.send("The ungotten words were:\n" + objecthelper.list_to_string(ungotten))
+
+#yes no poll for one topic
+
+yesnopoll = None
+ynpollreacts = {}
+ynpollname = ""
+@bot.command(help = "Make a yes/no question poll")
+async def makeynpoll(ctx, *, name):
+	global yesnopoll
+	global ynpollreacts
+	global ynpollname
+	ynpollname = name
+	ynpollreacts["\N{THUMBS UP SIGN}"] = 1
+	ynpollreacts["\N{THUMBS DOWN SIGN}"] = 1
+	ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(name, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
+	yesnopoll = await ctx.send(ynpollstring)
+	await yesnopoll.add_reaction("\N{THUMBS UP SIGN}")
+	await yesnopoll.add_reaction("\N{THUMBS DOWN SIGN}")
+
+alphabetcaps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+pollmessage = None
+availablereactions = ["\N{REGIONAL INDICATOR SYMBOL LETTER A}","\N{REGIONAL INDICATOR SYMBOL LETTER B}","\N{REGIONAL INDICATOR SYMBOL LETTER C}","\N{REGIONAL INDICATOR SYMBOL LETTER D}","\N{REGIONAL INDICATOR SYMBOL LETTER E}","\N{REGIONAL INDICATOR SYMBOL LETTER F}","\N{REGIONAL INDICATOR SYMBOL LETTER G}","\N{REGIONAL INDICATOR SYMBOL LETTER H}","\N{REGIONAL INDICATOR SYMBOL LETTER I}","\N{REGIONAL INDICATOR SYMBOL LETTER J}","\N{REGIONAL INDICATOR SYMBOL LETTER K}","\N{REGIONAL INDICATOR SYMBOL LETTER L}","\N{REGIONAL INDICATOR SYMBOL LETTER M}","\N{REGIONAL INDICATOR SYMBOL LETTER N}","\N{REGIONAL INDICATOR SYMBOL LETTER O}","\N{REGIONAL INDICATOR SYMBOL LETTER P}","\N{REGIONAL INDICATOR SYMBOL LETTER Q}","\N{REGIONAL INDICATOR SYMBOL LETTER R}","\N{REGIONAL INDICATOR SYMBOL LETTER S}","\N{REGIONAL INDICATOR SYMBOL LETTER T}"]
+pollchoices = []
+pollreacts = {}
+# letterindexing = {}
+# for x in range(26):
+# 	letterindexing[x] = availablereactions[x]
+
+def create_string(list, dict):
+	s = ""
+	for x in range(len(list)):
+		s += '{}. {}: {} vote(s)\n'.format(alphabetcaps[x], list[x], dict[availablereactions[x]]-1)
+	return s.strip()
+
+@bot.command(help = "Separate the poll choices with commas, up to twenty")
+async def makepoll(ctx, *, name):
+	global pollchoices
+	global pollmessage
+	name = name.strip()
+	pollchoices = name.split(",")
+	pollchoices = [x.strip() for x in pollchoices if len(x.strip()) != 0]
+	for x in range(len(pollchoices)):
+		pollreacts[availablereactions[x]] = 1
+	pollmessage = await ctx.send(create_string(pollchoices, pollreacts))
+	for x in pollreacts.keys():
+		await pollmessage.add_reaction(x)
+
+@bot.event
+async def on_reaction_add(reaction, user):
+	if user.bot:
+		return
+	if reaction.message == yesnopoll:
+		if reaction.emoji in ynpollreacts.keys():
+			ynpollreacts[reaction.emoji] += 1
+			ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
+			await yesnopoll.edit(content= ynpollstring)
+		return
+	if reaction.message == pollmessage:
+		if reaction.emoji in pollreacts.keys():
+			pollreacts[reaction.emoji] += 1
+			await pollmessage.edit(content = create_string(pollchoices, pollreacts))
+		return
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+	if yesnopoll is not None:
+		if payload.message_id == yesnopoll.id:
+			ynpollreacts[payload.emoji.name] -= 1
+			ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
+			await yesnopoll.edit(content = ynpollstring)
+			return
+	if pollmessage is not None:
+		if payload.message_id == pollmessage.id:
+			pollreacts[payload.emoji.name] -= 1
+			await pollmessage.edit(content = create_string(pollchoices, pollreacts))
+			return
 
 # GETS THE CLIENT OBJECT FROM DISCORD.PY. CLIENT IS SYNONYMOUS WITH BOT.
 
@@ -142,7 +231,7 @@ async def on_ready():
 @bot.event
 async def on_message(message):
 	# CHECKS IF THE MESSAGE THAT WAS SENT IS EQUAL TO "HELLO".
-	if message.content == "ま":
+	if message.content == "hello":
 		# SENDS BACK A MESSAGE TO THE CHANNEL.
 		await message.channel.send("hey dirtbag")
 	await bot.process_commands(message)
