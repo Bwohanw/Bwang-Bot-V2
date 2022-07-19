@@ -168,7 +168,10 @@ def create_string(list, dict):
 @bot.command(help = "Separate the poll choices with commas, up to twenty")
 async def makepoll(ctx, *, name):
 	global pollchoices
+	pollchoices = []
 	global pollmessage
+	global pollreacts
+	pollreacts = {}
 	name = name.strip()
 	pollchoices = name.split(",")
 	pollchoices = [x.strip() for x in pollchoices if len(x.strip()) != 0]
@@ -177,6 +180,19 @@ async def makepoll(ctx, *, name):
 	pollmessage = await ctx.send(create_string(pollchoices, pollreacts))
 	for x in pollreacts.keys():
 		await pollmessage.add_reaction(x)
+
+@bot.command()
+async def addpollchoice(ctx,*,name):
+	if pollmessage is None:
+		await ctx.send("There's no poll active right now")
+		return
+	if len(pollchoices) >= 20:
+		await ctx.send("Sorry, you can't add any more options to this poll")
+	name = name.strip()
+	pollchoices.append(name)
+	pollreacts[availablereactions[len(pollchoices)-1]] = 1
+	await pollmessage.add_reaction(availablereactions[len(pollchoices) - 1])
+	await pollmessage.edit(content = create_string(pollchoices, pollreacts))
 
 @bot.event
 async def on_reaction_add(reaction, user):
