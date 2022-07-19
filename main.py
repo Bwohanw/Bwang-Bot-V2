@@ -198,15 +198,17 @@ async def on_reaction_add(reaction, user):
 async def on_raw_reaction_remove(payload):
 	if yesnopoll is not None:
 		if payload.message_id == yesnopoll.id:
-			ynpollreacts[payload.emoji.name] -= 1
-			ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
-			await yesnopoll.edit(content = ynpollstring)
-			return
+			if payload.emoji.name in ynpollreacts.keys():
+				ynpollreacts[payload.emoji.name] -= 1
+				ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
+				await yesnopoll.edit(content = ynpollstring)
+				return
 	if pollmessage is not None:
 		if payload.message_id == pollmessage.id:
-			pollreacts[payload.emoji.name] -= 1
-			await pollmessage.edit(content = create_string(pollchoices, pollreacts))
-			return
+			if payload.emoji.name in pollreacts.keys():
+				pollreacts[payload.emoji.name] -= 1
+				await pollmessage.edit(content = create_string(pollchoices, pollreacts))
+				return
 
 # GETS THE CLIENT OBJECT FROM DISCORD.PY. CLIENT IS SYNONYMOUS WITH BOT.
 
