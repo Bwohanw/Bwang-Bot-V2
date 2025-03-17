@@ -76,7 +76,7 @@ def check(list):
 		return message.author.name not in list
 	return inner_check
 
-@bot.command()
+@bot.command(help = "begin a kanji quiz, default 2 questions")
 async def kanjiquiz(ctx, arg=2):
 	points = {}
 	ungotten = []
@@ -225,6 +225,35 @@ async def on_raw_reaction_remove(payload):
 				pollreacts[payload.emoji.name] -= 1
 				await pollmessage.edit(content = create_string(pollchoices, pollreacts))
 				return
+
+
+reminders = {} #dictionary of (member_id, guild_id): [list of reminders]
+@bot.command(help = "input a prompt to remind you of something to say 'next time in call'")
+async def remindcall(ctx, *args):
+	global reminders
+	if (len(args) == 0):
+		return
+	pair = (ctx.author.id, ctx.guild.id)
+	if (pair not in reminders):
+		reminders[pair] = []
+	reminders[pair].append(' '.join(args))
+	#print(reminders)
+	await ctx.send("Reminder set. You'll be reminded next time you join a voice channel")
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+	if not before.channel and after.channel:
+		pair = (member.id, member.guild.id)
+		if pair in reminders:
+			#print(member.guild.id)
+			channels = member.guild.text_channels
+			#print(channels)
+			if (len(channels) == 0):
+				return
+			channel = channels[0]
+			toret = f"{member.mention} reminding you of the following:\n{objecthelper.list_to_string(reminders[pair])}"
+			reminders.pop(pair)
+			await channel.send(toret)
 
 # GETS THE CLIENT OBJECT FROM DISCORD.PY. CLIENT IS SYNONYMOUS WITH BOT.
 
