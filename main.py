@@ -19,7 +19,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 bot = commands.Bot(command_prefix="$")
 
 
-@bot.command()
+@bot.command(help="pong, motherfucker")
 async def ping(ctx):
 	await ctx.channel.send("pong")
 
@@ -77,15 +77,15 @@ def check(list):
 	return inner_check
 
 @bot.command(help = "begin a kanji quiz, default 2 questions")
-async def kanjiquiz(ctx, arg=2):
+async def kanjiquiz(ctx, rounds=2):
 	points = {}
 	ungotten = []
 	mckey = {'a':0, 'b':1, 'c':2, 'd':3}
 	try:
-		arg = int(arg)
+		rounds = int(rounds)
 	except:
 		await ctx.send("Enter a valid argument stupidhead")
-	for x in range(arg):
+	for x in range(rounds):
 		guessed = []
 		correct = []
 		kanji_info = get_kanji_info()
@@ -132,103 +132,194 @@ async def kanjiquiz(ctx, arg=2):
 	else:
 		await ctx.send("The ungotten words were:\n" + objecthelper.list_to_string(ungotten))
 
-#yes no poll for one topic
-
-yesnopoll = None
-ynpollreacts = {}
-ynpollname = ""
-@bot.command(help = "Make a yes/no question poll")
-async def makeynpoll(ctx, *, name):
-	global yesnopoll
-	global ynpollreacts
-	global ynpollname
-	ynpollname = name
-	ynpollreacts["\N{THUMBS UP SIGN}"] = 1
-	ynpollreacts["\N{THUMBS DOWN SIGN}"] = 1
-	ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(name, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
-	yesnopoll = await ctx.send(ynpollstring)
-	await yesnopoll.add_reaction("\N{THUMBS UP SIGN}")
-	await yesnopoll.add_reaction("\N{THUMBS DOWN SIGN}")
 
 alphabetcaps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-pollmessage = None
 availablereactions = ["\N{REGIONAL INDICATOR SYMBOL LETTER A}","\N{REGIONAL INDICATOR SYMBOL LETTER B}","\N{REGIONAL INDICATOR SYMBOL LETTER C}","\N{REGIONAL INDICATOR SYMBOL LETTER D}","\N{REGIONAL INDICATOR SYMBOL LETTER E}","\N{REGIONAL INDICATOR SYMBOL LETTER F}","\N{REGIONAL INDICATOR SYMBOL LETTER G}","\N{REGIONAL INDICATOR SYMBOL LETTER H}","\N{REGIONAL INDICATOR SYMBOL LETTER I}","\N{REGIONAL INDICATOR SYMBOL LETTER J}","\N{REGIONAL INDICATOR SYMBOL LETTER K}","\N{REGIONAL INDICATOR SYMBOL LETTER L}","\N{REGIONAL INDICATOR SYMBOL LETTER M}","\N{REGIONAL INDICATOR SYMBOL LETTER N}","\N{REGIONAL INDICATOR SYMBOL LETTER O}","\N{REGIONAL INDICATOR SYMBOL LETTER P}","\N{REGIONAL INDICATOR SYMBOL LETTER Q}","\N{REGIONAL INDICATOR SYMBOL LETTER R}","\N{REGIONAL INDICATOR SYMBOL LETTER S}","\N{REGIONAL INDICATOR SYMBOL LETTER T}"]
-pollchoices = []
-pollreacts = {}
-# letterindexing = {}
-# for x in range(26):
-# 	letterindexing[x] = availablereactions[x]
+ynreactions = ["\N{THUMBS UP SIGN}", "\N{THUMBS DOWN SIGN}"]
+polls = {} #map of poll id to message
+polltoid = {}#map of message to id
+ynpolls = {} #map of ynpoll ids to the poll name
+options = {} #map of poll id to list of selection options
+reactions = {} #map of poll id to list of reaction counts
 
-def create_string(list, dict):
+def create_string(id):
 	s = ""
-	for x in range(len(list)):
-		s += '{}. {}: {} vote(s)\n'.format(alphabetcaps[x], list[x], dict[availablereactions[x]]-1)
-	return s.strip()
+	for x in range(len(options[id])):
+		if (id in ynpolls):
+			s += '{}: {} vote(s)\n'.format(options[id][x], reactions[id][x])
+		else:
+			s += '{}. {}: {} vote(s)\n'.format(alphabetcaps[x], options[id][x], reactions[id][x])
+	return s + "This poll id is {}. Use this number to interact with the poll".format(id)
 
-@bot.command(help = "Separate the poll choices with commas, up to twenty")
+@bot.command(help="Make a yes/no question poll")
+async def makeynpoll(ctx, *, name):
+	global polls
+	global ynpolls
+	global reactions
+	global options
+	global polltoid
+	id = random.randint(0,100000)
+	while id in polls:
+		id = random.randint(0,100000)
+	ynpolls[id] = name
+	options[id] = ["Yes", "No"]
+	reactions[id] = [0] * 2
+	pollstring = 'Poll: {}\n'.format(name) + create_string(id)
+	poll = await ctx.send(pollstring)
+	polls[id] = poll
+	polltoid[poll] = id
+	for reaction in ynreactions:
+		await poll.add_reaction(reaction)
+
+@bot.command(help = "Makes a poll with up to 20 options.\nFormat: $makepoll <option 1>, ..., <option n>")
 async def makepoll(ctx, *, name):
-	global pollchoices
-	pollchoices = []
-	global pollmessage
-	global pollreacts
-	pollreacts = {}
-	name = name.strip()
-	pollchoices = name.split(",")
-	pollchoices = [x.strip() for x in pollchoices if len(x.strip()) != 0]
-	for x in range(len(pollchoices)):
-		pollreacts[availablereactions[x]] = 1
-	pollmessage = await ctx.send(create_string(pollchoices, pollreacts))
-	for x in pollreacts.keys():
-		await pollmessage.add_reaction(x)
-
-@bot.command()
-async def addpollchoice(ctx,*,name):
-	if pollmessage is None:
-		await ctx.send("There's no poll active right now")
+	global polls
+	global reactions
+	global options
+	name = name.strip().split(",")
+	name = [x.strip() for x in name if len(x.strip()) != 0]
+	numoptions = len(name)
+	if (numoptions > 20):
+		await ctx.send("Only 20 options allowed")
 		return
-	if len(pollchoices) >= 20:
-		await ctx.send("Sorry, you can't add any more options to this poll")
+	id = random.randint(0,100000)
+	while id in polls:
+		id = random.randint(0,100000)
+	options[id] = name
+	reactions[id] = [0] * numoptions
+	pollstring = 'Poll:\n' + create_string(id)
+	poll = await ctx.send(pollstring)
+	polls[id] = poll
+	polltoid[poll] = id
+	for reaction in availablereactions[:numoptions]:
+		await poll.add_reaction(reaction)
+	
+@bot.command(help = "add an option to a poll using its id.\nformat: $addpolloption <poll_id> <option>")
+async def addpolloption(ctx,*,name):
+	global polls
+	global options
+	global reactions
 	name = name.strip()
-	pollchoices.append(name)
-	pollreacts[availablereactions[len(pollchoices)-1]] = 1
-	await pollmessage.add_reaction(availablereactions[len(pollchoices) - 1])
-	await pollmessage.edit(content = create_string(pollchoices, pollreacts))
+	id = int(name[:name.find(' ')]) #parse poll id
+	name = name[name.find(' ') + 1:]
+	if id in ynpolls:
+		await ctx.send("Unable to add options to yes/no polls")
+		return
+	if id not in polls or polls[id].guild != ctx.guild:
+		await ctx.send("No poll available")
+		return
+	if (len(options[id]) == 20):
+		await ctx.send("You can't add more options to this poll")
+		return
+	options[id].append(name)
+	reactions[id].append(0)
+	pollstring = 'Poll:\n' + create_string(id)
+	await polls[id].add_reaction(availablereactions[len(options[id])-1])
+	await polls[id].edit(content = pollstring)
 
 @bot.event
 async def on_reaction_add(reaction, user):
+	global reactions
+	global options
 	if user.bot:
 		return
-	if reaction.message == yesnopoll:
-		if reaction.emoji in ynpollreacts.keys():
-			ynpollreacts[reaction.emoji] += 1
-			ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
-			await yesnopoll.edit(content= ynpollstring)
+	if reaction.message not in polltoid:
 		return
-	if reaction.message == pollmessage:
-		if reaction.emoji in pollreacts.keys():
-			pollreacts[reaction.emoji] += 1
-			await pollmessage.edit(content = create_string(pollchoices, pollreacts))
-		return
+	id = polltoid[reaction.message]
+	if id in ynpolls:
+		if reaction.emoji not in ynreactions:
+			return
+		reactions[id][ynreactions.index(reaction.emoji)] += 1
+		pollstring = 'Poll: {}\n'.format(ynpolls[id]) + create_string(id)
+		await polls[id].edit(content = pollstring)
+	else:
+		if reaction.emoji not in availablereactions:
+			return
+		numoptions = len(options[id])
+		idx = availablereactions.index(reaction.emoji)
+		if (idx >= numoptions):
+			return
+		reactions[id][idx] += 1
+		pollstring = 'Poll:\n' + create_string(id)
+		await polls[id].edit(content = pollstring)
+
+async def fetch_message(payload):
+    channel = await bot.fetch_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    return message
 
 @bot.event
 async def on_raw_reaction_remove(payload):
-	if yesnopoll is not None:
-		if payload.message_id == yesnopoll.id:
-			if payload.emoji.name in ynpollreacts.keys():
-				ynpollreacts[payload.emoji.name] -= 1
-				ynpollstring = 'Poll: {} \nYes votes: {} \nNo votes: {}'.format(ynpollname, ynpollreacts["\N{THUMBS UP SIGN}"]-1, ynpollreacts["\N{THUMBS DOWN SIGN}"]-1)
-				await yesnopoll.edit(content = ynpollstring)
-				return
-	if pollmessage is not None:
-		if payload.message_id == pollmessage.id:
-			if payload.emoji.name in pollreacts.keys():
-				pollreacts[payload.emoji.name] -= 1
-				await pollmessage.edit(content = create_string(pollchoices, pollreacts))
-				return
+	global reactions
+	global options
+	message = await fetch_message(payload)
+	if message not in polltoid:
+		return
+	id = polltoid[message]
+	reaction = payload.emoji.name
+	if id in ynpolls:
+		if reaction not in ynreactions:
+			return
+		reactions[id][ynreactions.index(reaction)] -= 1
+		pollstring = 'Poll: {}\n'.format(ynpolls[id]) + create_string(id)
+		await polls[id].edit(content = pollstring)
+	else:
+		if reaction not in availablereactions:
+			return
+		numoptions = len(options[id])
+		idx = availablereactions.index(reaction)
+		if (idx >= numoptions):
+			return
+		reactions[id][idx] -= 1
+		pollstring = 'Poll:\n' + create_string(id)
+		await polls[id].edit(content = pollstring)
+
+async def _removepoll(id):
+	global polls
+	global ynpolls
+	global polltoid
+	global options
+	global reactions
+	poll = polls[id]
+	polls.pop(id)
+	if id in ynpolls:
+		ynpolls.pop(id)
+	polltoid.pop(poll)
+	options.pop(id)
+	reactions.pop(id)
+
+@bot.command(help = "removes the poll with specified id.")
+async def removepoll(ctx,*,name):
+	id = int(name)
+	if id not in polls or polls[id].guild != ctx.guild:
+		await ctx.send("Specified poll doesn't exist")
+		return
+	await _removepoll(id)
+	await ctx.send("Sucessfully removed poll {}".format(id))
+
+
+@bot.command(help = "deletes all polls in this server after confirmation.\nformat: $flushpolls CONFIRM")
+async def flushpolls(ctx,*args):
+	if (len(args) != 1):
+		await ctx.send("Please confirm deletion of all polls with argument CONFIRM")
+		return
+	args = ''.join(args)
+	if (args != "CONFIRM"):
+		await ctx.send("Please confirm deletion of all polls with argument CONFIRM")
+		return
+	guild = ctx.guild
+	todelete = []
+	for id in polls:
+		if (polls[id].guild == guild):
+			todelete.append(id)
+	for id in todelete:
+		await _removepoll(id)
+		await ctx.send("Successfully removed poll {}".format(id))
+	await ctx.send("Deleted all active polls in this server")
 
 
 reminders = {} #dictionary of (member_id, guild_id): [list of reminders]
-@bot.command(help = "input a prompt to remind you of something to say 'next time in call'")
+@bot.command(help = "set a prompt reminder activating on call join.\nformat: $remindcall <prompt>")
 async def remindcall(ctx, *args):
 	global reminders
 	if (len(args) == 0):
